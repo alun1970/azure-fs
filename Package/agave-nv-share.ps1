@@ -8,6 +8,9 @@
     
     NOTE: This script automatically elevates itself to administrator privileges if needed.
     
+.PARAMETER Log
+    Display the installation log file in an interactive viewer
+    
 .PARAMETER Help
     Display help information with all available parameters and examples
     
@@ -57,9 +60,14 @@
 .EXAMPLE
     .\AgaveFileShareComplete.ps1 -UninstallOnly
     Remove the installation
+    
+.EXAMPLE
+    .\AgaveFileShareComplete.ps1 -Log
+    View installation log in interactive viewer
 #>
 
 param(
+    [switch]$Log = $false,
     [switch]$Help = $false,
     [switch]$ShowProgress = $true,
     [switch]$SilentInstall = $false,
@@ -71,6 +79,58 @@ param(
     [switch]$SkipPrereqCheck = $false,
     [switch]$TestOnly = $false
 )
+
+# =============================================================================
+# LOG VIEWER: Display log file if requested
+# =============================================================================
+
+if ($Log) {
+    $logPath = "$env:TEMP\AgaveFileShare-Setup.log"
+    $transcriptPath = "$env:TEMP\AgaveFileShare-Transcript.log"
+    
+    Write-Host "`n╔════════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+    Write-Host "║" -ForegroundColor Cyan -NoNewline
+    Write-Host "                    AGAVE-NV-SHARE LOG VIEWER                       " -ForegroundColor White -NoNewline
+    Write-Host "║" -ForegroundColor Cyan
+    Write-Host "╚════════════════════════════════════════════════════════════════════╝`n" -ForegroundColor Cyan
+    
+    if (Test-Path $logPath) {
+        $logInfo = Get-Item $logPath
+        $lineCount = (Get-Content $logPath).Count
+        
+        Write-Host "Log File Found:" -ForegroundColor Green
+        Write-Host "  Path: " -ForegroundColor Gray -NoNewline
+        Write-Host $logPath -ForegroundColor White
+        Write-Host "  Size: " -ForegroundColor Gray -NoNewline
+        Write-Host "$([math]::Round($logInfo.Length / 1KB, 2)) KB" -ForegroundColor White
+        Write-Host "  Lines: " -ForegroundColor Gray -NoNewline
+        Write-Host $lineCount -ForegroundColor White
+        Write-Host "  Modified: " -ForegroundColor Gray -NoNewline
+        Write-Host $logInfo.LastWriteTime -ForegroundColor White
+        Write-Host "`nOpening interactive log viewer...`n" -ForegroundColor Cyan
+        
+        # Open in Out-GridView for interactive viewing
+        Get-Content $logPath | Out-GridView -Title "Agave File Share - Installation Log ($logPath)"
+    }
+    else {
+        Write-Host "Log file not found at: $logPath" -ForegroundColor Red
+        Write-Host "The log file is created when the script runs for the first time.`n" -ForegroundColor Yellow
+    }
+    
+    # Check for transcript log
+    if (Test-Path $transcriptPath) {
+        $choice = Read-Host "`nTranscript log also available. View it? (Y/N)"
+        if ($choice -eq 'Y' -or $choice -eq 'y') {
+            Get-Content $transcriptPath | Out-GridView -Title "Agave File Share - PowerShell Transcript ($transcriptPath)"
+        }
+    }
+    
+    if (-not $SilentInstall) {
+        Write-Host "`nPress Enter to exit..." -ForegroundColor Cyan
+        Read-Host
+    }
+    exit 0
+}
 
 # =============================================================================
 # HELP: Display usage information if requested
@@ -87,6 +147,8 @@ if ($Help) {
     Write-Host "  All-in-one Azure File Share installer with automatic admin elevation.`n" -ForegroundColor Gray
     
     Write-Host "SWITCH PARAMETERS:" -ForegroundColor Yellow
+    Write-Host "  -Log" -ForegroundColor Green -NoNewline
+    Write-Host "                    Display installation log in interactive viewer" -ForegroundColor Gray
     Write-Host "  -Help" -ForegroundColor Green -NoNewline
     Write-Host "                   Display this help message" -ForegroundColor Gray
     Write-Host "  -ShowProgress" -ForegroundColor Green -NoNewline
@@ -122,7 +184,9 @@ if ($Help) {
     Write-Host "`n  .\agave-nv-share.ps1 -UninstallOnly" -ForegroundColor White
     Write-Host "    → Remove the installation" -ForegroundColor Gray
     Write-Host "`n  .\agave-nv-share.ps1 -TestOnly" -ForegroundColor White
-    Write-Host "    → Run validation tests without making changes`n" -ForegroundColor Gray
+    Write-Host "    → Run validation tests without making changes" -ForegroundColor Gray
+    Write-Host "`n  .\agave-nv-share.ps1 -Log" -ForegroundColor White
+    Write-Host "    → View installation log in interactive viewer`n" -ForegroundColor Gray
     
     Write-Host "NOTE:" -ForegroundColor Yellow -NoNewline
     Write-Host " This script automatically elevates to administrator privileges.`n" -ForegroundColor Gray
