@@ -261,7 +261,7 @@ $Global:Config = @{
     
     # File Explorer integration
     NamespaceGUID = "{A5E4B2F3-3C4D-5E6F-9A1B-234567890DEF}"
-    NamespaceDisplayName = "Agave New Ventures Data"
+    NamespaceDisplayName = "Agave"
     
     # Azure configuration
     ResourceGroupName = "rg-agave-nv"
