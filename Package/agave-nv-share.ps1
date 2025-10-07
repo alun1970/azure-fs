@@ -264,7 +264,9 @@ $Global:Config = @{
     NamespaceDisplayName = "Agave New Ventures Data"
     
     # Azure configuration
+    ResourceGroupName = "rg-agave-nv"
     StorageAccount = "anvstore001"
+    StorageAccountName = "anvstore001"
     FileShareName = "data"
     KeyVaultName = "agave-nv-keyvault"
     TenantId = "043c2251-51b7-4d73-9ad0-874c2833ebcd"
@@ -319,6 +321,51 @@ function Stop-Logging {
     } catch {
         # Transcript may not be running, ignore error
     }
+}
+
+function Add-AzureUserPermissions {
+    param([string]$Username)
+    
+    Write-Info "Adding Azure RBAC permissions for: $Username"
+    
+    # Get current subscription ID
+    $subscriptionId = az account show --query id -o tsv
+    if (-not $subscriptionId) {
+        throw "Failed to get subscription ID. Please ensure you are logged into Azure CLI."
+    }
+    
+    Write-Info "Using subscription: $subscriptionId"
+    
+    # Construct resource scopes
+    $storageScope = "/subscriptions/$subscriptionId/resourceGroups/$($Global:Config.ResourceGroupName)/providers/Microsoft.Storage/storageAccounts/$($Global:Config.StorageAccountName)"
+    $keyVaultScope = "/subscriptions/$subscriptionId/resourceGroups/$($Global:Config.ResourceGroupName)/providers/Microsoft.KeyVault/vaults/$($Global:Config.KeyVaultName)"
+    
+    Write-Info "Adding Storage File Data SMB Share Contributor role..."
+    try {
+        $storageResult = az role assignment create --assignee $Username --role "Storage File Data SMB Share Contributor" --scope $storageScope --output json 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Success "✓ Storage role assigned successfully"
+        } else {
+            Write-Warning "Storage role may already exist or assignment failed"
+        }
+    } catch {
+        Write-Warning "Storage role assignment issue: $($_.Exception.Message)"
+    }
+    
+    Write-Info "Adding Key Vault Secrets User role..."
+    try {
+        $keyVaultResult = az role assignment create --assignee $Username --role "Key Vault Secrets User" --scope $keyVaultScope --output json 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Success "✓ Key Vault role assigned successfully"
+        } else {
+            Write-Warning "Key Vault role may already exist or assignment failed"
+        }
+    } catch {
+        Write-Warning "Key Vault role assignment issue: $($_.Exception.Message)"
+    }
+    
+    Write-Success "Azure RBAC permissions configuration completed"
+    Write-Info "Note: Role assignments may take 5-10 minutes to propagate through Azure AD"
 }
 
 # =============================================================================
@@ -933,14 +980,11 @@ function Invoke-PostInstallActions {
     # Run ADD-USER if requested
     if ($RunAddUser -and $Username) {
         Write-Info "Running ADD-USER for: $Username"
-        $addUserPath = Join-Path $Global:Config.InstallPath "ADD-USER.bat"
-        if (Test-Path $addUserPath) {
-            try {
-                & cmd.exe /c "`"$addUserPath`" `"$Username`""
-                Write-Success "ADD-USER completed"
-            } catch {
-                Write-Error "ADD-USER failed: $($_.Exception.Message)"
-            }
+        try {
+            Add-AzureUserPermissions -Username $Username
+            Write-Success "ADD-USER completed successfully"
+        } catch {
+            Write-Error "ADD-USER failed: $($_.Exception.Message)"
         }
     }
     
