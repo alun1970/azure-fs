@@ -706,27 +706,45 @@ function Install-FileExplorerIntegration {
     Write-Info "Installing File Explorer integration..."
     
     try {
-        # Create namespace registry entry
-        $namespacePath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Desktop\NameSpace\$($Global:Config.NamespaceGUID)"
+        # Create desktop shortcut to the file share
+        $desktopPath = [Environment]::GetFolderPath("Desktop")
+        $shortcutPath = Join-Path $desktopPath "Agave.lnk"
         
-        if (-not (Test-Path $namespacePath)) {
-            New-Item -Path $namespacePath -Force | Out-Null
+        $wshShell = New-Object -ComObject WScript.Shell
+        $shortcut = $wshShell.CreateShortcut($shortcutPath)
+        $shortcut.TargetPath = $Global:Config.NetworkPath
+        $shortcut.Description = "Agave Network File Share"
+        $shortcut.WorkingDirectory = $Global:Config.NetworkPath
+        $shortcut.Save()
+        
+        Write-Success "Desktop shortcut created: $shortcutPath"
+        
+        # Add to Quick Access in File Explorer
+        $shell = New-Object -ComObject Shell.Application
+        $folder = $shell.Namespace($Global:Config.NetworkPath)
+        if ($folder) {
+            # Pin to Quick Access
+            $folder.Self.InvokeVerb("pintohome")
+            Write-Success "Added to Quick Access in File Explorer"
         }
         
-        Set-ItemProperty -Path $namespacePath -Name "(default)" -Value $Global:Config.NamespaceDisplayName -Force
-        Write-Success "File Explorer integration installed"
-        
-        # Create shell folder configuration
-        $shellFolderPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Desktop\NameSpace\$($Global:Config.NamespaceGUID)\ShellFolder"
-        if (-not (Test-Path $shellFolderPath)) {
-            New-Item -Path $shellFolderPath -Force | Out-Null
+        # Create a network location shortcut in user profile
+        $networkShortcutsPath = "$env:APPDATA\Microsoft\Windows\Network Shortcuts"
+        if (-not (Test-Path $networkShortcutsPath)) {
+            New-Item -Path $networkShortcutsPath -ItemType Directory -Force | Out-Null
         }
         
-        Set-ItemProperty -Path $shellFolderPath -Name "Attributes" -Value 0x60000000 -Type DWord -Force
-        Write-Success "Shell folder attributes configured"
+        $networkShortcutPath = Join-Path $networkShortcutsPath "Agave.lnk"
+        $networkShortcut = $wshShell.CreateShortcut($networkShortcutPath)
+        $networkShortcut.TargetPath = $Global:Config.NetworkPath
+        $networkShortcut.Description = "Agave Network File Share"
+        $networkShortcut.Save()
+        
+        Write-Success "Network location shortcut created"
         
     } catch {
         Write-Error "Failed to install File Explorer integration: $($_.Exception.Message)"
+        Write-Warning "You can manually access the share at: $($Global:Config.NetworkPath)"
     }
 }
 
@@ -904,34 +922,25 @@ function Uninstall-FileShareComponents {
             }
         }
         
-        # Remove File Explorer integration (namespace registry)
+        # Remove File Explorer integration (shortcuts)
         try {
-            $namespacePath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Desktop\NameSpace\$($Global:Config.NamespaceGUID)"
-            if (Test-Path $namespacePath) {
-                Remove-Item $namespacePath -Recurse -Force -ErrorAction Stop
-                Write-Success "Removed File Explorer namespace integration"
+            # Remove desktop shortcut
+            $desktopPath = [Environment]::GetFolderPath("Desktop")
+            $desktopShortcut = Join-Path $desktopPath "Agave.lnk"
+            if (Test-Path $desktopShortcut) {
+                Remove-Item $desktopShortcut -Force -ErrorAction Stop
+                Write-Success "Removed desktop shortcut"
             }
-        } catch {
-            Write-Error "Failed to remove namespace registry: $($_.Exception.Message)"
-            $errorCount++
-        }
-        
-        # Remove additional File Explorer registry entries
-        try {
-            $explorerPaths = @(
-                "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\NewStartPanel\$($Global:Config.NamespaceGUID)",
-                "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\ClassicStartMenu\$($Global:Config.NamespaceGUID)",
-                "HKCU:\Software\Classes\CLSID\$($Global:Config.NamespaceGUID)"
-            )
             
-            foreach ($path in $explorerPaths) {
-                if (Test-Path $path) {
-                    Remove-Item $path -Recurse -Force -ErrorAction Stop
-                    Write-Success "Removed registry entry: $path"
-                }
+            # Remove network location shortcut
+            $networkShortcutsPath = "$env:APPDATA\Microsoft\Windows\Network Shortcuts"
+            $networkShortcut = Join-Path $networkShortcutsPath "Agave.lnk"
+            if (Test-Path $networkShortcut) {
+                Remove-Item $networkShortcut -Force -ErrorAction Stop
+                Write-Success "Removed network location shortcut"
             }
         } catch {
-            Write-Error "Failed to clean registry entries: $($_.Exception.Message)"
+            Write-Error "Failed to remove shortcuts: $($_.Exception.Message)"
             $errorCount++
         }
         
@@ -962,17 +971,19 @@ function Uninstall-FileShareComponents {
             Write-Warning "Uninstallation completed with $errorCount errors"
         }
         
-            } catch {
-                Write-Error "Uninstallation failed: $($_.Exception.Message)"
-                
-                # Pause before exit on error (unless silent)
-                if (-not $SilentInstall) {
-                    Write-Host "`nPress Enter to exit..." -ForegroundColor Red
-                    Read-Host
-                }
-                throw
-            }
-        }# =============================================================================
+    } catch {
+        Write-Error "Uninstallation failed: $($_.Exception.Message)"
+        
+        # Pause before exit on error (unless silent)
+        if (-not $SilentInstall) {
+            Write-Host "`nPress Enter to exit..." -ForegroundColor Red
+            Read-Host
+        }
+        throw
+    }
+}
+        
+# =============================================================================
 # POST-INSTALL ACTIONS
 # =============================================================================
 
