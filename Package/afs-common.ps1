@@ -154,9 +154,9 @@ function Add-AgaveNetworkLocation {
         Set-ItemProperty -Path $clsidPath -Name "System.IsPinnedToNameSpaceTree" -Value 0x1 -Type DWord
         Set-ItemProperty -Path $clsidPath -Name "SortOrderIndex" -Value 0x42 -Type DWord
         
-        # DefaultIcon - using imageres.dll for network folder icon
+        # DefaultIcon - using OneDrive icon like Cornish Havens
         New-Item -Path "$clsidPath\DefaultIcon" -Force | Out-Null
-        Set-ItemProperty -Path "$clsidPath\DefaultIcon" -Name "(Default)" -Value "%SystemRoot%\System32\imageres.dll,-1002"
+        Set-ItemProperty -Path "$clsidPath\DefaultIcon" -Name "(Default)" -Value "C:\Program Files\Microsoft OneDrive\OneDrive.exe,6"
         
         # InProcServer32 - hex value for %SystemRoot%\system32\shell32.dll
         New-Item -Path "$clsidPath\InProcServer32" -Force | Out-Null
